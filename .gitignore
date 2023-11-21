@@ -1,10 +1,13 @@
 data/*
-datasets/*
+datasets/*.vi
+datasets/*.en
+
+datasets/*.ids
+datasets/*.xml
 models/*
 
 __pycache__/
 
 data/
-datasets/
 models/
 
