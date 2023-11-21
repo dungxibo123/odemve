@@ -1,8 +1,10 @@
 data/*
+datasets/*
 models/*
 
 __pycache__/
 
 data/
+datasets/
 models/
 
