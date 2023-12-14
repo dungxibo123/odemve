@@ -2,8 +2,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import MultiheadAttention
-from transformers import ViTFeatureExtractor, ViTForImageSequenceFeatureExtractor, AutoModel, AutoTokenizer
+from transformers import ViTFeatureExtractor, AutoModel, AutoTokenizer,ViTModel, AutoProcessor
 import pytorch_lightning as pl
+from sentence_transformers import SentenceTransformer
+
 
 class AttentionBlock(nn.Module):
     def __init__(self, input_dim, output_dim, num_heads, dropout):
@@ -42,20 +44,22 @@ class EnglishVQA(pl.LightningModule):
         self.opt = opt
 
         # Load or create required models
-        self.vision_transformers = ViTFeatureExtractor.from_pretrained("google/vit-base-patch16-224")
-        self.sentence_bert = AutoModel.from_pretrained("sentence-transformers/paraphrase-MiniLM-L6-v2")
-        self.tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/paraphrase-MiniLM-L6-v2")
+        self.vit_processor = AutoProcessor.from_pretrained("google/vit-base-patch16-224")
+        self.vision_transformers = ViTModel.from_pretrained("google/vit-base-patch16-224")
+        #self.sentence_bert = AutoModel.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
+        #self.tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
+        self.sentence_bert = SentenceTransformer('all-MiniLM-L6-v2')
 
         # Define attention block
         self.attention_block = AttentionBlock(
-            input_dim=self.sentence_bert.config.hidden_size + self.vision_transformers.config.hidden_size,
-            output_dim=self.sentence_bert.config.hidden_size,
-            num_heads=self.opt.get('num_heads', 8),
+            input_dim=opt.get('sbert_hidden_size', 384) + self.vision_transformers.config.hidden_size,
+            output_dim=opt.get('sbert_hidden_size', 384),
+            num_heads=self.opt.get('num_heads', 12),
             dropout=self.opt.get('dropout', 0.1)
         )
 
         # Fully connected layer for output
-        self.fc = nn.Linear(self.sentence_bert.config.hidden_size, opt['num_labels'])
+        self.fc = nn.Linear(opt.get('sbert_hidden_size', 384), opt['num_labels'])
 
     def forward(self, text_input, image_input):
         # Get embeddings for text and image
@@ -72,9 +76,12 @@ class EnglishVQA(pl.LightningModule):
 
     def get_text_embedding(self, text_input):
         # Tokenize and get embeddings for the text
-        input_ids = self.tokenizer(text_input, return_tensors="pt")["input_ids"]
-        text_embedding = self.sentence_bert(input_ids)[0][:, 0, :]  # Take the [CLS] token embedding
+        #tokens = self.tokenizer(text_input, return_tensors="pt")
+        #input_ids = tokens["input_ids"]
+        #attention_masks = tokens["attention_mask"]
+        text_embedding = self.sentence_bert.encode(text_input)
         return text_embedding
+         #text_embedding
 
     def get_image_embedding(self, image_input):
         # Extract image features using Vision Transformers
@@ -94,13 +101,22 @@ class EnglishVQA(pl.LightningModule):
 
         return output
 
-# Example usage:
-opt = {'num_labels': 10, 'num_heads': 12, 'dropout': 0.2}  # You can customize the options here
-english_vqa_model = EnglishVQA(opt)
+    
 
-# Example inference:
-text_input = "What is in the image?"
-image_input = torch.randn((1, 3, 224, 224))  # Example image input
-output = english_vqa_model.inference(text_input, image_input)
-print("Inference Output Shape:", output.shape)
+#Mean Pooling - Take attention mask into account for correct averaging
+def mean_pooling(model_output, attention_mask):
+    token_embeddings = model_output[0] #First element of model_output contains all token embeddings
+    input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+    print(input_mask_expanded.shape)
+    return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
 
+if __name__ == "__main__":
+
+    opt = {'num_labels': 10, 'num_heads': 12, 'dropout': 0.2, 'sbert_hidden_size': 384}  # You can customize the options here
+    english_vqa_model = EnglishVQA(opt)
+
+    # Example inference:
+    text_input = ["The quick brown fox jumps over the lazy dog."]
+    image_input = torch.randn((1, 3, 224, 224))  # Example image input
+    output = english_vqa_model.get_text_embedding(text_input)
+    
