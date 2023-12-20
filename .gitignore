@@ -1,13 +1,12 @@
-data/*
 datasets/*.vi
 datasets/*.en
 
 datasets/*.ids
+datasets/*
 datasets/*.xml
 models/*
 
 __pycache__/
 
-data/
 models/
 
