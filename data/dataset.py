@@ -11,10 +11,21 @@ class CustomDataset(Dataset):
         self.coco_annotations_path = coco_annotations_path
         self.coco_images_directory = coco_images_directory
         self.transform = transform
-
+        self.mapping = self.label2id(data_list)
         # Load COCO dataset
         self.coco = COCO(coco_annotations_path)
-
+    def label2id(self, data_list):
+        values = {}
+        for i in data_list:
+          if i['answer'] not in values.keys():
+            values[ i['answer'] ] = len(values)
+        return values
+    @property
+    def id2label(self):
+        res = {}
+        for k, v in self.mapping.items():
+            res.update({v: k})
+        return res
     def __len__(self):
         return len(self.data_list)
 
@@ -47,4 +58,3 @@ class CustomDataset(Dataset):
         image = Image.open(image_path).convert('RGB')
 
         return image
-
