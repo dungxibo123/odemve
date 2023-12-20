@@ -15,11 +15,17 @@ class CustomDataset(Dataset):
         # Load COCO dataset
         self.coco = COCO(coco_annotations_path)
     def label2id(self, data_list):
-        values = {}
+        values = []
+
         for i in data_list:
-          if i['answer'] not in values.keys():
-            values[ i['answer'] ] = len(values)
-        return values
+          if i['answer'] not in values:
+            values.append(i['answer'])
+        values = sorted(values)
+
+        res = {}
+        for item in values:
+          res[item] = len(res)
+        return res
     @property
     def id2label(self):
         res = {}
